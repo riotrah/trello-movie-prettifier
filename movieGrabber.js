@@ -1,19 +1,22 @@
 // Connect to MovieDB api via MovieDB library
 require('dotenv').config();
 const mdb = require('moviedb')(process.env.TMBD_KEY);
-// console.log(mdb);
 exports = module.exports = {};
 let IMAGE_BASE;
 let IMAGE_SIZE;
 let GENRE_LIST;
 
+/**
+ * Grabs genrelist and configuration info from TMDB
+ * Should be chained before grab()
+ * @return {Promise} A promise with no payload
+ */
 exports.setup = () => {
 
   return new Promise((resolve, reject) => {
     mdb.configuration((err, res) => {
 
       if(err) {
-        console.log(err);
         reject(err);
       } else {
         IMAGE_BASE = res.images.base_url;
@@ -23,7 +26,6 @@ exports.setup = () => {
     }).genreMovieList(null, (err, res) => {
 
       if(err) {
-        console.log(err);
         reject(err);
       } else {
         GENRE_LIST = createGenreObject(res.genres);
@@ -33,20 +35,26 @@ exports.setup = () => {
   });
 };
 
+/**
+ * Main function to call.
+ * It grabs movie info given a String detailing the title
+ * @param  {String}   movieTitle A movie title
+ * @param  {Function} callback   A callback
+ * @return {[type]}              [description]
+ */
 exports.grab = (movieTitle, callback) => {
 
   let movieObj = {};
-  mdb.searchMovie({query: movieTitle}, (err, movies) => {
-    if(err) {
-      callback(err, null);
-    } else if(movies.results[0]) {
-      // console.log(movies.results[0]);
-      movieObj = createMovieObject(movies.results[0]);
 
-      callback(null, movieObj);
-    } else {
-      // console.log(movies);
-    }
+  return new Promise((resolve, reject) => {
+    mdb.searchMovie({query: movieTitle}, (err, movies) => {
+      if(err) {
+        reject(err);
+      } else if(movies.results[0]) {
+        movieObj = createMovieObject(movies.results[0]);
+        resolve(movieObj);
+      }
+    });
   });
 };
 
@@ -56,7 +64,6 @@ exports.grab = (movieTitle, callback) => {
  * @return {[type]}     [description]
  */
 function createMovieObject(movie) {
-  // console.log(movie);
   const title = movie.title;
   const year = movie.release_date.slice(0, 4);
 
