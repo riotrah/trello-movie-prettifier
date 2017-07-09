@@ -135,9 +135,9 @@ function addGenres(card, movie) {
         console.log(err);
       } else {
         // console.log(res);
-        handleCardSuccess(movie);
       }
     });
+    handleCardSuccess(movie);
   });
 }
 
