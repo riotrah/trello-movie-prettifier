@@ -1,3 +1,15 @@
+// ----------------------------------------------------------------------------
+// 
+// movieGrabber.js 
+// 
+// Uses moviedb to make API requests given a movie Title
+// Creates a movieObj that maps to Trello card fields,
+// Containing title, rating, poster, genres and synopses!
+// 
+// - riotrah
+// 
+// ----------------------------------------------------------------------------
+
 // Connect to MovieDB api via MovieDB library
 require('dotenv').config();
 const mdb = require('moviedb')(process.env.TMBD_KEY);
@@ -40,7 +52,7 @@ exports.setup = () => {
  * It grabs movie info given a String detailing the title
  * @param  {String}   movieTitle A movie title
  * @param  {Function} callback   A callback
- * @return {[type]}              [description]
+ * @return {Promise}              A promise carrying the movieObj
  */
 exports.grab = (movieTitle, callback) => {
 
@@ -60,8 +72,8 @@ exports.grab = (movieTitle, callback) => {
 
 /**
  * Creates an object holding the all the information needed to send to Trello
- * @param  {[type]} movie [description]
- * @return {[type]}     [description]
+ * @param  {Object} movie TMDB API movie result
+ * @return {Object}     A movie object that maps to Trello card fields
  */
 function createMovieObject(movie) {
   const title = movie.title;
