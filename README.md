@@ -10,7 +10,12 @@ Its not very intelligent, so it grabs the *first* movie it gets results from.
 
 If any word in the movie name is mispelled, it will fail for that card!
 
+# Who is it for?
+No one - it is nigh useless
+*It was fun to build tho!*
+
 # In action
+![](http://g.recordit.co/VJRWvixPvX.gif)
 
 # How to run
 
@@ -21,24 +26,33 @@ If any word in the movie name is mispelled, it will fail for that card!
 5. Clone this repo.
 6. Create an `.env` file in the directory root  and place the following text in it, replacing the parts that need to be replaced.
 
-	TMBD_KEY='<your TMDB key here'
-	T_KEY='<your Trello key here'
-	T_TOKEN='<your Trello token here'
-	T_BOARD='<your Trello board id here>'
+```
+TMBD_KEY='<your TMDB key here'
+T_KEY='<your Trello key here'
+T_TOKEN='<your Trello token here'
+T_BOARD='<your Trello board id here>'
+```
 
 7. Fill your board with cards with the titles of movies. The closer the name to the actual title of the movie, the better. 
 
-"Space Odyssey" will correct to "2001: A Space Odyssey" and will work
-"Space Oddysy" will be skipped
-"The Blair Witch Project" will work, and will populate the card with information for the 1999 movie
-"Blair Witch" will work, but will populate the card with information for the recent remake/sequel - so beware what you type!
+- "Space Odyssey" will correct to "2001: A Space Odyssey" and will work
+- "Space Oddysy" will be skipped
+- "The Blair Witch Project" will work, and will populate the card with information for the 1999 movie
+- "Blair Witch" will work, but will populate the card with information for the recent remake/sequel - so beware what you type!
 
 
 # Current issues:
 
-[ ] - It may make too many requests at once due to its async nature 
-[ ] - It fails on slight misspellings of words
+- [ ] It may make too many requests at once due to its async nature 
+- [ ] It fails on slight misspellings of words
+- [ ] It does nothing with cards already prettified -> so no updating
+- [ ] It only grabs the first movie from TMDB's response -> no way to specify date of original if reboot is trash
 
 # Credits
 
-[The Movie DataBase API](https://www.themoviedb.org/documentation/api) "This product uses the TMDb API but is not endorsed or certified by TMDb." 
+[The Movie DataBase API](https://www.themoviedb.org/documentation/api) - A beautiful community and API.
+
+This product uses the TMDb API but is not endorsed or certified by TMDb.
+![movie_img](https://www.themoviedb.org/assets/static_cache/02a9430b88975cae16fcfcc9cf7b5799/images/v4/logos/primary-green.svg)
+[node-trello](https://github.com/adunkman/node-trello) - nice lil Trello wrapper
+[MovieDB](https://github.com/impronunciable/moviedb) - nice lil TMDB wrapper
