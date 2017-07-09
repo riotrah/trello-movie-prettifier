@@ -15,9 +15,11 @@ No one - it is nigh useless
 *It was fun to build tho!*
 
 # In action
-![](http://g.recordit.co/VJRWvixPvX.gif)
+![](https://thumbs.gfycat.com/DeficientNecessaryElectriceel-size_restricted.gif)
 
-# How to run
+# Usage
+
+## Setup
 
 1. Grab a TMDB Application Key.
 2. Grab a Trello API Key.
@@ -26,20 +28,24 @@ No one - it is nigh useless
 5. Clone this repo.
 6. Create an `.env` file in the directory root  and place the following text in it, replacing the parts that need to be replaced.
 
-```
-TMBD_KEY='<your TMDB key here'
-T_KEY='<your Trello key here'
-T_TOKEN='<your Trello token here'
-T_BOARD='<your Trello board id here>'
-```
+`TMBD_KEY='<your TMDB key here'`
 
-7. Fill your board with cards with the titles of movies. The closer the name to the actual title of the movie, the better. 
+`T_KEY='<your Trello key here'`
 
-- "Space Odyssey" will correct to "2001: A Space Odyssey" and will work
-- "Space Oddysy" will be skipped
-- "The Blair Witch Project" will work, and will populate the card with information for the 1999 movie
-- "Blair Witch" will work, but will populate the card with information for the recent remake/sequel - so beware what you type!
+`T_TOKEN='<your Trello token here'`
 
+`T_BOARD='<your Trello board id here>'`
+
+## Running
+
+1. Fill your board with cards with the titles of movies. The closer the name to the actual title of the movie, the better. 
+
+	- "Space Odyssey" will correct to "2001: A Space Odyssey" and will work
+	- "Space Oddysy" will be skipped
+	- "The Blair Witch Project" will work, and will populate the card with information for the 1999 movie
+	- "Blair Witch" will work, but will populate the card with information for the recent remake/sequel - so beware what you type!
+
+2. Run `node trello-movie` in your terminal
 
 # Current issues:
 
@@ -53,6 +59,12 @@ T_BOARD='<your Trello board id here>'
 [The Movie DataBase API](https://www.themoviedb.org/documentation/api) - A beautiful community and API.
 
 This product uses the TMDb API but is not endorsed or certified by TMDb.
-![movie_img](https://www.themoviedb.org/assets/static_cache/02a9430b88975cae16fcfcc9cf7b5799/images/v4/logos/primary-green.svg)
+
+<img height="150" width="150" src="https://www.themoviedb.org/assets/static_cache/02a9430b88975cae16fcfcc9cf7b5799/images/v4/logos/primary-green.svg">
+
+<!-- ![movie_img](https://www.themoviedb.org/assets/static_cache/02a9430b88975cae16fcfcc9cf7b5799/images/v4/logos/primary-green.svg) -->
 [node-trello](https://github.com/adunkman/node-trello) - nice lil Trello wrapper
+
 [MovieDB](https://github.com/impronunciable/moviedb) - nice lil TMDB wrapper
+
+[This movie board](https://trello.com/b/3Zo3Q3dF/movies) - this hand-done board inspired this lil project!
