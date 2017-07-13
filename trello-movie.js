@@ -7,6 +7,11 @@
 // - Rayat Rahman
 // - gh: riotrah
 // 
+// TODO: 
+// - Promisify everything
+// - Update cards 
+// - Add streaming links and labels
+// 
 // License: http://opensource.org/licenses/MIT
 // 
 // ----------------------------------------------------------------------------
@@ -28,6 +33,9 @@ t.get('/1/boards/'+boardId+'/cards', function(err, data) {
 
 /**
  * Runs the loop to process the array of cards
+ *
+ * TODO: Don't check for prettified cards; update them
+ * 
  * @param  {Array} cards The array of Card objects returned by Trello's request
  */
 function handleCards(cards) {
@@ -50,7 +58,7 @@ function handleCards(cards) {
  */
 function isPretty(card) {
 
-  dateRegEx = /\(\b(19|20)\d{2}\b\)/g;
+  const dateRegEx = /\(\b(19|20)\d{2}\b\)/g;
   if(card.name.substr(card.name.length - 6).match(dateRegEx)) {
     return true;
   } else {
@@ -97,6 +105,9 @@ function addMovieDetails(card, movie) {
 
 /**
  * Adds movie poster image url as attachment to card
+ *
+ * TODO: update poster instead of readding
+ * 
  * @param  {Object} card  Trello API card object
  * @param  {Object} movie movieGrabber.js Movie Object
  */
@@ -119,6 +130,9 @@ function addPoster(card, movie) {
 
 /**
  * Adds movie genres as labels to card
+ *
+ * TODO: update poster instead of readding
+ * 
  * @param  {Object} card  Trello API card object
  * @param  {Object} movie movieGrabber.js Movie Object
  */

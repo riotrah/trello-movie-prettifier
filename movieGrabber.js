@@ -124,7 +124,7 @@ Rating:  ${res.vote_average}`;
  */
  function convertGenres(res) {
 
-  labels = [];
+  const labels = [];
   res.genre_ids.forEach((id) => {
     labels.push(GENRE_LIST[id]);
   });

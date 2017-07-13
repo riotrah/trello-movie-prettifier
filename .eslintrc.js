@@ -1,5 +1,5 @@
 module.exports = {
-    "extends": "google",
+    "extends": ["google", "eslint:recommended"],
     "parserOptions": {
         "ecmaVersion": 6,
         "sourceType": "module",
@@ -9,6 +9,11 @@ module.exports = {
     },
     "rules": {
     	"padded-blocks" : 0,
-    	"keyword-spacing" : 0
+    	"keyword-spacing" : 0,
+        "no-console" : 0,
+    },
+    "env": {
+        "node": true,
+        "es6": true
     }
 };
