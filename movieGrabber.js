@@ -12,6 +12,7 @@
 
 // Connect to MovieDB api via MovieDB library
 require('dotenv').config();
+const nflx = require('./netflixGrabber.js');
 const mdb = require('moviedb')(process.env.TMBD_KEY);
 exports = module.exports = {};
 let IMAGE_BASE;
@@ -51,20 +52,31 @@ exports.setup = () => {
  * Main function to call.
  * It grabs movie info given a String detailing the title
  * @param  {String}   movieTitle A movie title
- * @param  {Function} callback   A callback
  * @return {Promise}              A promise carrying the movieObj
  */
-exports.grab = (movieTitle, callback) => {
-
-  let movieObj = {};
+exports.grab = (movieTitle) => {
 
   return new Promise((resolve, reject) => {
+
     mdb.searchMovie({query: movieTitle}, (err, movies) => {
+
       if(err) {
         reject(err);
       } else if(movies.results[0]) {
-        movieObj = createMovieObject(movies.results[0]);
-        resolve(movieObj);
+
+        const movie = movies.results[0];
+
+        nflx.link(movie.title)
+        .then((link) => {
+          // console.log(link);
+          const desc = createCardDesc(movie) + `\n\nNetflix: ${link}`;
+          resolve(createMovieObject(true, desc, movie));
+        })
+        .catch((err) => {
+          console.log(err+"");
+          const desc = createCardDesc(movie);
+          resolve(createMovieObject(false, desc, movie));
+        });
       }
     });
   });
@@ -72,18 +84,20 @@ exports.grab = (movieTitle, callback) => {
 
 /**
  * Creates an object holding the all the information needed to send to Trello
+ * @param {Boolean} netflix Whether or not the movie is on netflix
  * @param  {Object} movie TMDB API movie result
  * @return {Object}     A movie object that maps to Trello card fields
  */
-function createMovieObject(movie) {
+function createMovieObject(netflix, desc, movie) {
   const title = movie.title;
   const year = movie.release_date.slice(0, 4);
 
+
   return {
     name: title + ' (' + year + ')',
-    desc: createCardDesc(movie),
+    desc: desc,
     attachment: IMAGE_BASE + IMAGE_SIZE + movie.poster_path,
-    labels: convertGenres(movie),
+    labels: convertGenres(netflix, movie),
   };
 }
 
@@ -106,14 +120,13 @@ function createGenreObject(res) {
 /**
  * Creates a string that contains movie details for the trello description
  * Currently includes movie overview and community rating
- * @param  {Object} res TMDB API Movie Object
+ * @param  {Object} movie TMDB API Movie Object
  * @return {String}     A combined string holding the good stuff
  */
-function createCardDesc(res) {
+function createCardDesc(movie) {
 
-  let desc = `${res.overview} 
+  const desc = `${movie.overview}\n\nRating:  ${movie.vote_average}`;
 
-Rating:  ${res.vote_average}`;
   return desc;
 }
 
@@ -122,9 +135,14 @@ Rating:  ${res.vote_average}`;
  * @param  {Object} res TMDB API Movie Object
  * @return {Array}     An array of Strings, each a genre
  */
- function convertGenres(res) {
+ function convertGenres(netflix, res) {
 
   const labels = [];
+
+  if(netflix) {
+    console.log('Movie on netflix');
+  }
+
   res.genre_ids.forEach((id) => {
     labels.push(GENRE_LIST[id]);
   });
