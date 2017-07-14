@@ -21,13 +21,28 @@ const Trello = require('node-trello');
 const t = new Trello(process.env.T_KEY, process.env.T_TOKEN);
 const movie = require('./moviegrabber.js');
 
+const mode = process.argv[2];
+
 // Grab the board to update from env
 const boardId = process.env.T_BOARD;
 t.get('/1/boards/'+boardId+'/cards', function(err, data) {
-  // console.log(data);
+
+  console.log('Parsing', data.length, 'cards');
+  console.log(data[0]);
+  
   movie.setup()
   .then(()=>{
-    handleCards(data);
+
+    switch(mode) {
+
+      case null:
+      case undefined:
+        handleCards(data);
+        break;
+      case "--reset":
+        resetCards(data);
+        break;
+    }
   });
 });
 
@@ -45,7 +60,8 @@ function handleCards(cards) {
       console.log('Grabbing data for', card.name);
       grabMovieFromCard(card);
     } else {
-      console.log('Already prettified', card.name);
+      console.log('Updating', card.name);
+      grabMovieFromCard(card);
     }
   });
 }
@@ -77,9 +93,10 @@ function grabMovieFromCard(card) {
   .then((movie) => {
     addMovieDetails(card, movie);
   }).catch((err) => {
-    console.log(err);
+    console.log(err+"");
   });
 }
+
 /**
  * Applies data from movie grab to a given card
  * @param  {Object} card  Trello API card object
@@ -95,7 +112,7 @@ function addMovieDetails(card, movie) {
 
   t.put(cardUrl, cardDetails, (err, res) => {
     if(err) {
-      console.log(err);
+      console.log(err+"");
     } else {
       // console.log(res);
       addPoster(card, movie);
@@ -115,14 +132,14 @@ function addPoster(card, movie) {
 
   const cardAttachUrl = '/1/cards/'+card.id+'/attachments';
   const attachment = {
-    url: movie.attachment,
+    url: isPretty(card) ? "" : movie.attachment,
   };
 
   t.post(cardAttachUrl, attachment, (err, res) => {
     if(err) {
-      console.log(err);
+      console.log(err+"");
     } else {
-      // console.log(res);
+      // console.log(res.id);
       addGenres(card, movie);
     }
   });
@@ -146,7 +163,7 @@ function addGenres(card, movie) {
     };
     t.post(cardLabelsUrl, label, (err, res) => {
       if(err) {
-        console.log(err);
+        console.log(err+"");
       } else {
         // console.log(res);
       }
@@ -162,4 +179,70 @@ function addGenres(card, movie) {
 function handleCardSuccess(movie) {
 
   console.log('Successfully grabbed!', movie.name);
+}
+
+function resetCards(cards) {
+
+  cards.forEach((card) => {
+    
+    // if(isPretty(card)) {
+
+      console.log('Stripping', card.name);
+      stripCard(card);
+    // }
+  });
+}
+
+function stripCard(card) {
+
+  const strippedName = isPretty(card) 
+    ? card.name.substr(0, card.name.length - 6)
+    : card.name;
+
+  replaceNameAndDescription(card, strippedName);
+  stripLabels(card);
+  stripAttachment(card);
+
+  // delete attachments
+  // t.delete
+}
+
+function replaceNameAndDescription(card, strippedName) {
+
+  t.put('1/cards/'+card.id, {
+    name: strippedName,
+    desc: "",
+    // idLabels: []
+  }, (err, res) => {
+    if(err) {
+      console.log(err.responseBody, err.statusMessage);
+    } 
+  });
+}
+
+function stripLabels(card) {
+
+  card.labels.forEach((label) => {
+
+    console.log('Stripping LABEL:', label.name, "from", card.name);
+    t.del('1/cards/'+card.id+'/idLabels/'+label.id, (err, res) => {
+    if(err) {
+      console.log(err+"");
+    }
+    // } else {
+      // console.log("Deleted label", label.name, "from", card.name);
+    // }
+    });
+  });
+}
+
+function stripAttachment(card) {
+
+  if(card.idAttachmentCover) {
+    t.del('1/cards/'+card.id+'/attachments/'+card.idAttachmentCover, (err, res) => {
+      if(err) {
+        console.log(err+"");
+      }
+    });
+  }
 }
