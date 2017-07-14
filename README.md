@@ -1,9 +1,11 @@
 # trello-movie-prettifier
 This lil node app converts simple plaintext Trello cards with movie titles as their card titles into aesthetic cards containing links and details of each including a poster thumbnail!
 
+## *Now with Netflix link addition!*
+
 # Overview
 The app will crawl a given board for cards of a broadly defined format. It grabs data based on the title of the card, from The Movie DataBase.
-It then updates that card with its proper title, a poster, genre labels, its synopsis and its TMDB rating!
+It then updates that card with its proper title, a poster, genre labels, its synopsis, its TMDB rating and a link to its Netflix page if it's on it!
 
 ## Note:
 Its not very intelligent, so it grabs the *first* movie it gets results from.
@@ -50,8 +52,23 @@ T_BOARD='<your Trello board id here>'
 
 - [ ] It may make too many requests at once due to its async nature 
 - [ ] It fails on slight misspellings of words
-- [ ] It does nothing with cards already prettified -> so no updating
 - [ ] It only grabs the first movie from TMDB's response -> no way to specify date of original if reboot is trash
+
+# Contribution:
+
+1. Make a fork
+2. Contribute
+3. ???
+4. Profit!
+5. (Please submit PR)
+
+## Some ideas
+
+- [ ] Implement API request limiting 
+- [ ] Implement spell checking
+- [ ] Implement a better way to tag a film as already prettified
+- [ ] Implement a way to pick the year of the title
+
 
 # Credits
 
