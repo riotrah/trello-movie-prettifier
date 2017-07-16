@@ -17,7 +17,7 @@
 // ----------------------------------------------------------------------------
 
 // Connect to MovieDB api via MovieDB library
-const movie = require('./movieGrabber.js');
+const movie = require('./lib/movieGrabber.js');
 
 movie.setup()
 .then(() => {

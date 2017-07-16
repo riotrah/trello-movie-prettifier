@@ -19,6 +19,7 @@
   "dependencies": {
     "cheerio": "^1.0.0-rc.2",
     "dotenv": "^4.0.0",
+    "limiter": "^1.1.2",
     "moviedb": "^0.2.8",
     "node-trello": "^1.2.1",
     "request": "^2.81.0",

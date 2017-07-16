@@ -19,7 +19,10 @@
 require('dotenv').config();
 const Trello = require('node-trello');
 const t = new Trello(process.env.T_KEY, process.env.T_TOKEN);
-const movie = require('./moviegrabber.js');
+const movie = require('./lib/moviegrabber.js');
+const RateLimiter = require('limiter').RateLimiter;
+const movieLimiter = new RateLimiter(30, 'second');
+const trelloLimiter = new RateLimiter(10, 'second');
 
 const mode = process.argv[2];
 
@@ -37,11 +40,13 @@ t.get('/1/boards/'+boardId+'/cards', function(err, data) {
 
       case null:
       case undefined:
-        handleCards(data);
+        grabCards(data);
         break;
       case "--reset":
         resetCards(data);
         break;
+      case "--update":
+        updateCards(data);
     }
   });
 });
@@ -53,17 +58,26 @@ t.get('/1/boards/'+boardId+'/cards', function(err, data) {
  * 
  * @param  {Array} cards The array of Card objects returned by Trello's request
  */
-function handleCards(cards) {
+function grabCards(cards) {
 
   cards.forEach((card) => {
+
     if(!isPretty(card)) {
       console.log('Grabbing data for', card.name);
       grabMovieFromCard(card);
-    } else {
+    }
+  });
+}
+
+function updateCards(cards) {
+
+  cards.forEach((card) => {
+
+    if(isPretty(card)) {
       console.log('Updating', card.name);
       grabMovieFromCard(card);
     }
-  });
+  })
 }
 
 /**
@@ -89,11 +103,17 @@ function isPretty(card) {
  */
 function grabMovieFromCard(card) {
 
-  movie.grab(card.name)
-  .then((movie) => {
-    addMovieDetails(card, movie);
-  }).catch((err) => {
-    console.log(err+"");
+  movieLimiter.removeTokens(1, (err, remaining) => {
+    if(err) {
+      console.log('Too many grab requests');
+    } else {
+      movie.grab(card.name)
+      .then((movie) => {
+        addMovieDetails(card, movie);
+      }).catch((err) => {
+        console.log(err+"");
+      });
+    }
   });
 }
 
@@ -132,7 +152,7 @@ function addPoster(card, movie) {
 
   const cardAttachUrl = '/1/cards/'+card.id+'/attachments';
   const attachment = {
-    url: isPretty(card) ? "" : movie.attachment,
+    url: movie.attachment,
   };
 
   t.post(cardAttachUrl, attachment, (err, res) => {
@@ -168,8 +188,8 @@ function addGenres(card, movie) {
         // console.log(res);
       }
     });
-    handleCardSuccess(movie);
   });
+  handleCardSuccess(movie);
 }
 
 /**
@@ -193,18 +213,25 @@ function resetCards(cards) {
   });
 }
 
+//////////////////////
+// Resetting cards  //
+//////////////////////
+
 function stripCard(card) {
 
-  const strippedName = isPretty(card) 
-    ? card.name.substr(0, card.name.length - 6)
-    : card.name;
+  trelloLimiter.removeTokens(1, function(err, remaining) {
+    if(err) {
+      console.log('Too many strip requests');
+    } else {
+      const strippedName = isPretty(card) 
+        ? card.name.substr(0, card.name.length - 6)
+        : card.name;
 
-  replaceNameAndDescription(card, strippedName);
-  stripLabels(card);
-  stripAttachment(card);
-
-  // delete attachments
-  // t.delete
+      replaceNameAndDescription(card, strippedName);
+      stripLabels(card);
+      stripAttachment(card);
+    }
+  });
 }
 
 function replaceNameAndDescription(card, strippedName) {
