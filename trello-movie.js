@@ -227,49 +227,71 @@ function stripCard(card) {
         ? card.name.substr(0, card.name.length - 6)
         : card.name;
 
-      replaceNameAndDescription(card, strippedName);
-      stripLabels(card);
-      stripAttachment(card);
-    }
+  replaceNameAndDescription(card, strippedName)
+  .then((res) => {
+    stripAttachment(card);
+  },
+  (err) => {
+    console.log(err+"");
+  })
+  .then((res) => {
+    stripLabels(card);
+  },
+  (err) => {
+    console.log(err+"");
   });
+
+  // delete attachments
+  // t.delete
 }
 
 function replaceNameAndDescription(card, strippedName) {
 
-  t.put('1/cards/'+card.id, {
-    name: strippedName,
-    desc: "",
-    // idLabels: []
-  }, (err, res) => {
-    if(err) {
-      console.log(err.responseBody, err.statusMessage);
-    } 
+  return new Promise((resolve, reject) => {
+    t.put('1/cards/'+card.id, {
+      name: strippedName,
+      desc: "",
+      // idLabels: []
+    }, (err, res) => {
+      if(err) {
+        reject(err);  
+        // console.log(err+"");      
+      } else {
+        resolve(res);
+      }
+    });
   });
 }
 
 function stripLabels(card) {
 
-  card.labels.forEach((label) => {
+  // return new Promise((resolve, reject) => {
+    card.labels.forEach((label) => {
 
-    console.log('Stripping LABEL:', label.name, "from", card.name);
-    t.del('1/cards/'+card.id+'/idLabels/'+label.id, (err, res) => {
-    if(err) {
-      console.log(err+"");
-    }
-    // } else {
-      // console.log("Deleted label", label.name, "from", card.name);
-    // }
+      console.log('Stripping LABEL:', label.name, "from", card.name);
+      t.del('1/cards/'+card.id+'/idLabels/'+label.id, (err, res) => {
+      if(err) {
+        console.log(err+"");
+      }
+      // } else {
+        // console.log("Deleted label", label.name, "from", card.name);
+      // }
+      });
     });
-  });
+  // });
 }
 
 function stripAttachment(card) {
 
-  if(card.idAttachmentCover) {
-    t.del('1/cards/'+card.id+'/attachments/'+card.idAttachmentCover, (err, res) => {
-      if(err) {
-        console.log(err+"");
-      }
-    });
-  }
+  return new Promise((resolve, reject) => {
+    if(card.idAttachmentCover) {
+      t.del('1/cards/'+card.id+'/attachments/'+card.idAttachmentCover, (err, res) => {
+        if(err) {
+          reject(err);
+        } else {
+          resolve(res);
+        }
+      });
+    }
+  });
 }
