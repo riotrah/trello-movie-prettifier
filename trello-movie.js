@@ -19,23 +19,20 @@
 require('dotenv').config();
 const Trello = require('node-trello');
 const t = new Trello(process.env.T_KEY, process.env.T_TOKEN);
-const movie = require('./lib/moviegrabber.js');
+const m = require('./lib/moviegrabber.js');
 const RateLimiter = require('limiter').RateLimiter;
-const movieLimiter = new RateLimiter(30, 'second');
-const trelloLimiter = new RateLimiter(10, 'second');
+const limiter = new RateLimiter(5, 'second');
 
 const mode = process.argv[2];
 
-// Grab the board to update from env
 const boardId = process.env.T_BOARD;
 t.get('/1/boards/'+boardId+'/cards', function(err, data) {
 
   console.log('Parsing', data.length, 'cards');
   console.log(data[0]);
   
-  movie.setup()
-  .then(()=>{
-
+  m.setup()
+  .then((configs)=>{
     switch(mode) {
 
       case null:
@@ -60,10 +57,10 @@ t.get('/1/boards/'+boardId+'/cards', function(err, data) {
  */
 function grabCards(cards) {
 
+
   cards.forEach((card) => {
 
     if(!isPretty(card)) {
-      console.log('Grabbing data for', card.name);
       grabMovieFromCard(card);
     }
   });
@@ -74,7 +71,7 @@ function updateCards(cards) {
   cards.forEach((card) => {
 
     if(isPretty(card)) {
-      console.log('Updating', card.name);
+      // console.log('Updating', card.name);
       grabMovieFromCard(card);
     }
   })
@@ -103,19 +100,40 @@ function isPretty(card) {
  */
 function grabMovieFromCard(card) {
 
-  movieLimiter.removeTokens(1, (err, remaining) => {
-    if(err) {
-      console.log('Too many grab requests');
-    } else {
-      movie.grab(card.name)
-      .then((movie) => {
-        addMovieDetails(card, movie);
-      }).catch((err) => {
-        console.log(err+"");
-      });
-    }
+  m.grab(card.name)
+  .then((movie) => {
+    return addMovieDetails(card, movie);
+  }, 
+  (err) => {
+    console.log(err+"");
+  })
+  .then((movie) => {
+    return addPoster(card, movie);
+  },
+  (err) => {
+    console.log(err+"");
+  })
+  .then((movie) => {
+    if(movie.labels) { addGenres(card, movie); }
+  },
+  (err) => {
+    console.log(err+"");
   });
 }
+
+// function grabMovieFromCard(card) {
+
+//   m.grab(card.name)
+//   .then((movie) => {
+//     return addMovieDetails(card, movie);
+//   })
+//   .then((movie) => {
+//     return addPoster(card, movie);
+//   })
+//   .then((movie) => {
+//     if(movie.labels) { addGenres(card, movie); }
+//   });
+// }
 
 /**
  * Applies data from movie grab to a given card
@@ -130,13 +148,20 @@ function addMovieDetails(card, movie) {
     desc: movie.desc,
   };
 
-  t.put(cardUrl, cardDetails, (err, res) => {
-    if(err) {
-      console.log(err+"");
-    } else {
-      // console.log(res);
-      addPoster(card, movie);
-    }
+  return new Promise((resolve, reject) => {
+    limiter.removeTokens(1, (err, remaining) => {
+      if(err) {
+        reject("    Trello:"+err+"");
+      } else {
+        t.put(cardUrl, cardDetails, (err, res) => {
+          if(err) {
+            reject(err+"");
+          } else {
+            resolve(movie);
+          } 
+        });
+      }
+    });
   });
 }
 
@@ -155,13 +180,20 @@ function addPoster(card, movie) {
     url: movie.attachment,
   };
 
-  t.post(cardAttachUrl, attachment, (err, res) => {
-    if(err) {
-      console.log(err+"");
-    } else {
-      // console.log(res.id);
-      addGenres(card, movie);
-    }
+  return new Promise((resolve, reject) => {
+    limiter.removeTokens(1, (err, remaining) => {
+      if(err) {
+        reject("    Trello:"+err+"");
+      } else {
+        t.post(cardAttachUrl, attachment, (err, res) => {
+          if(err) {
+            reject(err+"");
+          } else {
+            resolve(movie);
+          }  
+        });
+      }
+    });
   });
 }
 
@@ -177,18 +209,23 @@ function addGenres(card, movie) {
 
   const cardLabelsUrl = '/1/cards/'+card.id+'/labels';
 
-  movie.labels.forEach((l)=>{
-    const label = {
-      name: l,
-    };
-    t.post(cardLabelsUrl, label, (err, res) => {
-      if(err) {
-        console.log(err+"");
-      } else {
-        // console.log(res);
-      }
-    });
+  limiter.removeTokens(movie.labels.length, (err, remaining) => {
+    if(err) {
+      console.log("    Trello:"+err+"");
+    } else {
+      movie.labels.forEach((l)=>{
+        const label = {
+          name: l,
+        };
+        t.post(cardLabelsUrl, label, (err, res) => {
+          if(err) {
+            console.log(err+"");
+          } 
+        });
+      });
+    }
   });
+
   handleCardSuccess(movie);
 }
 
@@ -201,29 +238,22 @@ function handleCardSuccess(movie) {
   console.log('Successfully grabbed!', movie.name);
 }
 
-function resetCards(cards) {
-
-  cards.forEach((card) => {
-    
-    // if(isPretty(card)) {
-
-      console.log('Stripping', card.name);
-      stripCard(card);
-    // }
-  });
-}
-
 //////////////////////
 // Resetting cards  //
 //////////////////////
 
+function resetCards(cards) {
+
+  cards.forEach((card) => {
+
+    console.log('Stripping', card.name);
+    stripCard(card);
+  });
+}
+
 function stripCard(card) {
 
-  trelloLimiter.removeTokens(1, function(err, remaining) {
-    if(err) {
-      console.log('Too many strip requests');
-    } else {
-      const strippedName = isPretty(card) 
+  const strippedName = isPretty(card) 
         ? card.name.substr(0, card.name.length - 6)
         : card.name;
 
@@ -241,57 +271,68 @@ function stripCard(card) {
     console.log(err+"");
   });
 
-  // delete attachments
-  // t.delete
 }
 
 function replaceNameAndDescription(card, strippedName) {
 
   return new Promise((resolve, reject) => {
-    t.put('1/cards/'+card.id, {
-      name: strippedName,
-      desc: "",
-      // idLabels: []
-    }, (err, res) => {
-      if(err) {
-        reject(err);  
-        // console.log(err+"");      
-      } else {
-        resolve(res);
+    
+    limiter.removeTokens(1, (err, remaining) => {
+
+      if(err) { reject("    Trello:"+err+""); }
+      else {
+        t.put('1/cards/'+card.id, {
+          name: strippedName,
+          desc: "",
+          // idLabels: []
+        }, (err, res) => {
+          if(err) {
+            reject(err);  
+          } else {
+            resolve(res);
+          }
+        });
       }
     });
   });
 }
 
-function stripLabels(card) {
-
-  // return new Promise((resolve, reject) => {
-    card.labels.forEach((label) => {
-
-      console.log('Stripping LABEL:', label.name, "from", card.name);
-      t.del('1/cards/'+card.id+'/idLabels/'+label.id, (err, res) => {
-      if(err) {
-        console.log(err+"");
-      }
-      // } else {
-        // console.log("Deleted label", label.name, "from", card.name);
-      // }
-      });
-    });
-  // });
-}
-
 function stripAttachment(card) {
 
   return new Promise((resolve, reject) => {
+
     if(card.idAttachmentCover) {
-      t.del('1/cards/'+card.id+'/attachments/'+card.idAttachmentCover, (err, res) => {
-        if(err) {
-          reject(err);
-        } else {
-          resolve(res);
+
+      limiter.removeTokens(1, (err, remaining) => {
+
+        if(err) { reject("    Trello:"+err+""); }
+        else {
+          t.del('1/cards/'+card.id+'/attachments/'+card.idAttachmentCover, (err, res) => {
+            if(err) {
+              reject(err);
+            } else {
+              resolve(res);
+            }
+          });
         }
       });
     }
+  });
+}
+
+function stripLabels(card) {
+
+  card.labels.forEach((label) => {
+
+    console.log('Stripping LABEL:', label.name, "from", card.name);
+    limiter.removeTokens(1, (err, remaining) => {
+      
+      t.del('1/cards/'+card.id+'/idLabels/'+label.id, (err, res) => {
+
+        if(err) {
+          console.log(err+"");
+        }
+      });
+    });
   });
 }
