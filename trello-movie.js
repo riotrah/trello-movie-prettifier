@@ -154,34 +154,13 @@ function grabMovieFromCard(card) {
   
   m.grab(name, year)
   .then((movie) => {
-    
-    limiter.schedule(addMovieDetails, card, movie)
-    .then((movie) => {
-      console.log();
-    })
-    .catch((err) => {
-      console.log(err+"");
-    });
-
-    if(movie.attachment && !card.idAttachmentCover) {
-      limiter.schedule(addPoster, card, movie)
-      .then((movie) => {
-        console.log();
-      })
-      .catch((err) => {
-        console.log(err+"");
-      });
-    }
-
-    if(movie.labels.length && card.labels.length) { 
-      limiter.schedule(addGenres, card, movie)
-      .then((movies) => {
-        handleCardSuccess(movies[0]);
-      })
-      .catch((err) => {
-        console.log(err+"");
-      });
-    }
+    return submitMovieToCard(movie,card);
+  }
+  ,(err) => {
+    console.log(err+"");
+  })
+  .then((movies) => {
+    handleCardSuccess(movies[0]);
   })
   .catch((err) => {
     console.log(err+"");
@@ -270,6 +249,23 @@ function addGenres(card, movie) {
       });
     }));
   });
+
+  return Promise.all(promises);
+}
+
+function submitMovieToCard(movie, card) {
+
+  const promises = [];
+
+  promises.push(limiter.schedule(addMovieDetails, card, movie));
+
+  if(movie.attachment && !card.idAttachmentCover) {
+    promises.push(limiter.schedule(addPoster, card, movie));
+  }
+
+  if(movie.labels.length && card.labels.length) { 
+    promises.push(limiter.schedule(addGenres, card, movie));
+  }
 
   return Promise.all(promises);
 }
