@@ -42,8 +42,11 @@ t.get('/1/boards/'+boardId+'/cards', function(err, data) {
       case "--reset":
         resetCards(data);
         break;
-      case "--update":
-        updateCards(data);
+      // case "--update":
+        // updateCards(data);
+      default:
+        console.log('Not a supported mode');
+        break;
     }
   });
 });
@@ -61,20 +64,11 @@ function grabCards(cards) {
   cards.forEach((card) => {
 
     if(!isPretty(card)) {
+
+
       grabMovieFromCard(card);
     }
   });
-}
-
-function updateCards(cards) {
-
-  cards.forEach((card) => {
-
-    if(isPretty(card)) {
-      // console.log('Updating', card.name);
-      grabMovieFromCard(card);
-    }
-  })
 }
 
 /**
