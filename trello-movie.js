@@ -20,8 +20,8 @@ require('dotenv').config();
 const Trello = require('node-trello');
 const t = new Trello(process.env.T_KEY, process.env.T_TOKEN);
 const m = require('./lib/moviegrabber.js');
-const RateLimiter = require('limiter').RateLimiter;
-const limiter = new RateLimiter(5, 'second');
+const Bottleneck = require('bottleneck');
+const limiter = new Bottleneck(1, 100);
 
 const mode = process.argv[2];
 
@@ -65,7 +65,6 @@ function grabCards(cards) {
 
     if(!isPretty(card)) {
 
-
       grabMovieFromCard(card);
     }
   });
@@ -79,12 +78,33 @@ function grabCards(cards) {
  */
 function isPretty(card) {
 
-  const dateRegEx = /\(\b(19|20)\d{2}\b\)/g;
-  if(card.name.substr(card.name.length - 6).match(dateRegEx)) {
+  if(card.desc.substr(card.desc.length - 7) === "Grabbed") {
     return true;
   } else {
     return false;
   }
+}
+
+function cardNameHasYear(cardName) {
+
+  const dateRegEx = /\(\b(19|20)\d{2}\b\)/g;
+  if(cardName.substr(cardName.length - 6).match(dateRegEx)) {
+    return true; 
+  } else {
+    return false;
+  }
+}
+
+function getYearFromCardName(cardName) {
+
+  const year = cardName.substr(cardName.length - 6).replace(/[()]/g, '');
+
+  return Number(year);
+}
+
+function getTitleFromCardName(cardName) {
+
+  return cardName.substr(0, cardName.length - 7);
 }
 
 /**
@@ -92,42 +112,82 @@ function isPretty(card) {
  * Then takes that data and updates card with it
  * @param  {Object} card Trello API card object
  */
-function grabMovieFromCard(card) {
+/*function grabMovieFromCard(card) {
 
   m.grab(card.name)
   .then((movie) => {
-    return addMovieDetails(card, movie);
+    return limiter.schedule(addMovieDetails, card, movie);
   }, 
   (err) => {
     console.log(err+"");
+    return card;
   })
   .then((movie) => {
-    return addPoster(card, movie);
+    return limiter.schedule(addPoster, card, movie);
   },
   (err) => {
     console.log(err+"");
+    return card;
   })
   .then((movie) => {
-    if(movie.labels) { addGenres(card, movie); }
+    if(movie.labels) { return limiter.schedule(addGenres, card, movie); }
+    else { return [movie]; }
   },
   (err) => {
+    console.log(err+"");
+    return [card];
+  })
+  .then((movies) => {
+    handleCardSuccess(movies[0]);
+  });
+}*/
+
+function grabMovieFromCard(card) {
+
+  let name = card.name;
+  let year;
+
+  if(cardNameHasYear(card.name)) {
+    name = getTitleFromCardName(card.name);
+    year = getYearFromCardName(card.name);
+  }
+  
+  m.grab(name, year)
+  .then((movie) => {
+    
+    limiter.schedule(addMovieDetails, card, movie)
+    .then((movie) => {
+      console.log();
+    })
+    .catch((err) => {
+      console.log(err+"");
+    });
+
+    if(movie.attachment && !card.idAttachmentCover) {
+      limiter.schedule(addPoster, card, movie)
+      .then((movie) => {
+        console.log();
+      })
+      .catch((err) => {
+        console.log(err+"");
+      });
+    }
+
+    if(movie.labels.length && card.labels.length) { 
+      limiter.schedule(addGenres, card, movie)
+      .then((movies) => {
+        handleCardSuccess(movies[0]);
+      })
+      .catch((err) => {
+        console.log(err+"");
+      });
+    }
+  })
+  .catch((err) => {
     console.log(err+"");
   });
+
 }
-
-// function grabMovieFromCard(card) {
-
-//   m.grab(card.name)
-//   .then((movie) => {
-//     return addMovieDetails(card, movie);
-//   })
-//   .then((movie) => {
-//     return addPoster(card, movie);
-//   })
-//   .then((movie) => {
-//     if(movie.labels) { addGenres(card, movie); }
-//   });
-// }
 
 /**
  * Applies data from movie grab to a given card
@@ -136,25 +196,21 @@ function grabMovieFromCard(card) {
  */
 function addMovieDetails(card, movie) {
 
+  const cardDesc = movie.desc + `\n\n${new Date().toString()} : Grabbed`;
+
   const cardUrl = '/1/cards/'+card.id;
   const cardDetails = {
     name: movie.name,
-    desc: movie.desc,
+    desc: cardDesc,
   };
 
   return new Promise((resolve, reject) => {
-    limiter.removeTokens(1, (err, remaining) => {
+    t.put(cardUrl, cardDetails, (err, res) => {
       if(err) {
-        reject("    Trello:"+err+"");
+        reject(err+"");
       } else {
-        t.put(cardUrl, cardDetails, (err, res) => {
-          if(err) {
-            reject(err+"");
-          } else {
-            resolve(movie);
-          } 
-        });
-      }
+        resolve(movie);
+      } 
     });
   });
 }
@@ -175,18 +231,12 @@ function addPoster(card, movie) {
   };
 
   return new Promise((resolve, reject) => {
-    limiter.removeTokens(1, (err, remaining) => {
+    t.post(cardAttachUrl, attachment, (err, res) => {
       if(err) {
-        reject("    Trello:"+err+"");
+        reject(err+"");
       } else {
-        t.post(cardAttachUrl, attachment, (err, res) => {
-          if(err) {
-            reject(err+"");
-          } else {
-            resolve(movie);
-          }  
-        });
-      }
+        resolve(movie);
+      }  
     });
   });
 }
@@ -202,25 +252,26 @@ function addPoster(card, movie) {
 function addGenres(card, movie) {
 
   const cardLabelsUrl = '/1/cards/'+card.id+'/labels';
+  const promises = [];
 
-  limiter.removeTokens(movie.labels.length, (err, remaining) => {
-    if(err) {
-      console.log("    Trello:"+err+"");
-    } else {
-      movie.labels.forEach((l)=>{
-        const label = {
-          name: l,
-        };
-        t.post(cardLabelsUrl, label, (err, res) => {
-          if(err) {
-            console.log(err+"");
-          } 
-        });
+  movie.labels.forEach((l)=>{
+    const label = {
+      name: l,
+    };
+
+    promises.push(new Promise((resolve, reject) => {
+
+      t.post(cardLabelsUrl, label, (err, res) => {
+        if(err) {
+          reject(err);
+        } else {
+          resolve(movie);
+        }
       });
-    }
+    }));
   });
 
-  handleCardSuccess(movie);
+  return Promise.all(promises);
 }
 
 /**
@@ -240,52 +291,88 @@ function resetCards(cards) {
 
   cards.forEach((card) => {
 
-    console.log('Stripping', card.name);
     stripCard(card);
   });
 }
 
 function stripCard(card) {
 
-  const strippedName = isPretty(card) 
+/*  const strippedName = isPretty(card) 
         ? card.name.substr(0, card.name.length - 6)
         : card.name;
 
-  replaceNameAndDescription(card, strippedName)
-  .then((res) => {
-    stripAttachment(card);
+  limiter.schedule(replaceNameAndDescription, card, strippedName)
+  .then((card) => {
+    if(card.idLabels.length) { return limiter.schedule(stripLabels, card); }
+    else { return [card]; }
   },
   (err) => {
     console.log(err+"");
   })
-  .then((res) => {
-    stripLabels(card);
+  .then((card) => {
+    if(card[0].idAttachmentCover) { return limiter.schedule(stripAttachment, card[0]); }
+    else { return card[0]; }
+  },
+  (err) => {
+    console.log(err+"");
+  })
+  .then((card) => {
+    console.log('Stripped', card.name);
   },
   (err) => {
     console.log(err+"");
   });
+  */
+/*  const strippedName = isPretty(card) 
+        ? getTitleFromCardName(card.name)
+        : card.name;*/
 
+  limiter.schedule(replaceNameAndDescription, card, card.name)
+  .then((card) => {
+    console.log();
+  })
+  .catch((err) => {
+    console.log(err+"");
+  });
+
+  if (card.idLabels.length) {
+
+    limiter.schedule(stripLabels, card)
+    .then((card) => {
+      console.log();
+    })
+    .catch((err) => {
+      console.log(err+"");
+    });
+  }
+    
+  if (card.idAttachmentCover) {
+
+    limiter.schedule(stripAttachment, card)
+    .then((card) => {
+      console.log();
+    })
+    .catch((err) => {
+      console.log(err+"");
+    });
+  }
 }
 
 function replaceNameAndDescription(card, strippedName) {
 
   return new Promise((resolve, reject) => {
-    
-    limiter.removeTokens(1, (err, remaining) => {
 
-      if(err) { reject("    Trello:"+err+""); }
-      else {
-        t.put('1/cards/'+card.id, {
-          name: strippedName,
-          desc: "",
-          // idLabels: []
-        }, (err, res) => {
-          if(err) {
-            reject(err);  
-          } else {
-            resolve(res);
-          }
-        });
+    console.log('Stripping', card.name);
+
+    t.put('1/cards/'+card.id, {
+      name: strippedName,
+      desc: "",
+      // idLabels: []
+    }, (err, res) => {
+      if(err) {
+        reject(err);  
+      } else {
+        resolve(card);
       }
     });
   });
@@ -295,38 +382,35 @@ function stripAttachment(card) {
 
   return new Promise((resolve, reject) => {
 
-    if(card.idAttachmentCover) {
-
-      limiter.removeTokens(1, (err, remaining) => {
-
-        if(err) { reject("    Trello:"+err+""); }
-        else {
-          t.del('1/cards/'+card.id+'/attachments/'+card.idAttachmentCover, (err, res) => {
-            if(err) {
-              reject(err);
-            } else {
-              resolve(res);
-            }
-          });
-        }
-      });
-    }
+    t.del('1/cards/'+card.id+'/attachments/'+card.idAttachmentCover, (err, res) => {
+      if(err) {
+        reject(err);
+      } else {
+        resolve(card);
+      }
+    });
   });
 }
 
 function stripLabels(card) {
 
+  const promises = [];
+
   card.labels.forEach((label) => {
 
     console.log('Stripping LABEL:', label.name, "from", card.name);
-    limiter.removeTokens(1, (err, remaining) => {
+    
+    promises.push(new Promise((resolve, reject) => {  
       
       t.del('1/cards/'+card.id+'/idLabels/'+label.id, (err, res) => {
-
         if(err) {
-          console.log(err+"");
+          reject(err);
+        } else {
+          resolve(card);
         }
       });
-    });
+    }));
   });
+
+  return Promise.all(promises);
 }
