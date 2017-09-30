@@ -19,28 +19,33 @@
 require('dotenv').config();
 const Trello = require('node-trello');
 const t = new Trello(process.env.T_KEY, process.env.T_TOKEN);
-const movie = require('./moviegrabber.js');
+const m = require('./lib/moviegrabber.js');
+const Bottleneck = require('bottleneck');
+const limiter = new Bottleneck(1, 100);
 
 const mode = process.argv[2];
 
-// Grab the board to update from env
 const boardId = process.env.T_BOARD;
 t.get('/1/boards/'+boardId+'/cards', function(err, data) {
 
   console.log('Parsing', data.length, 'cards');
   console.log(data[0]);
   
-  movie.setup()
-  .then(()=>{
-
+  m.setup()
+  .then((configs)=>{
     switch(mode) {
 
       case null:
       case undefined:
-        handleCards(data);
+        grabCards(data);
         break;
       case "--reset":
         resetCards(data);
+        break;
+      // case "--update":
+        // updateCards(data);
+      default:
+        console.log('Not a supported mode');
         break;
     }
   });
@@ -53,14 +58,13 @@ t.get('/1/boards/'+boardId+'/cards', function(err, data) {
  * 
  * @param  {Array} cards The array of Card objects returned by Trello's request
  */
-function handleCards(cards) {
+function grabCards(cards) {
+
 
   cards.forEach((card) => {
+
     if(!isPretty(card)) {
-      console.log('Grabbing data for', card.name);
-      grabMovieFromCard(card);
-    } else {
-      console.log('Updating', card.name);
+
       grabMovieFromCard(card);
     }
   });
@@ -74,12 +78,33 @@ function handleCards(cards) {
  */
 function isPretty(card) {
 
-  const dateRegEx = /\(\b(19|20)\d{2}\b\)/g;
-  if(card.name.substr(card.name.length - 6).match(dateRegEx)) {
+  if(card.desc.substr(card.desc.length - 7) === "Grabbed") {
     return true;
   } else {
     return false;
   }
+}
+
+function cardNameHasYear(cardName) {
+
+  const dateRegEx = /\(\b(19|20)\d{2}\b\)/g;
+  if(cardName.substr(cardName.length - 6).match(dateRegEx)) {
+    return true; 
+  } else {
+    return false;
+  }
+}
+
+function getYearFromCardName(cardName) {
+
+  const year = cardName.substr(cardName.length - 6).replace(/[()]/g, '');
+
+  return Number(year);
+}
+
+function getTitleFromCardName(cardName) {
+
+  return cardName.substr(0, cardName.length - 7);
 }
 
 /**
@@ -87,14 +112,60 @@ function isPretty(card) {
  * Then takes that data and updates card with it
  * @param  {Object} card Trello API card object
  */
+/*function grabMovieFromCard(card) {
+
+  m.grab(card.name)
+  .then((movie) => {
+    return limiter.schedule(addMovieDetails, card, movie);
+  }, 
+  (err) => {
+    console.log(err+"");
+    return card;
+  })
+  .then((movie) => {
+    return limiter.schedule(addPoster, card, movie);
+  },
+  (err) => {
+    console.log(err+"");
+    return card;
+  })
+  .then((movie) => {
+    if(movie.labels) { return limiter.schedule(addGenres, card, movie); }
+    else { return [movie]; }
+  },
+  (err) => {
+    console.log(err+"");
+    return [card];
+  })
+  .then((movies) => {
+    handleCardSuccess(movies[0]);
+  });
+}*/
+
 function grabMovieFromCard(card) {
 
-  movie.grab(card.name)
+  let name = card.name;
+  let year;
+
+  if(cardNameHasYear(card.name)) {
+    name = getTitleFromCardName(card.name);
+    year = getYearFromCardName(card.name);
+  }
+  
+  m.grab(name, year)
   .then((movie) => {
-    addMovieDetails(card, movie);
-  }).catch((err) => {
+    return submitMovieToCard(movie,card);
+  }
+  ,(err) => {
+    console.log(err+"");
+  })
+  .then((movies) => {
+    handleCardSuccess(movies[0]);
+  })
+  .catch((err) => {
     console.log(err+"");
   });
+
 }
 
 /**
@@ -104,19 +175,22 @@ function grabMovieFromCard(card) {
  */
 function addMovieDetails(card, movie) {
 
+  const cardDesc = movie.desc + `\n\n${new Date().toString()} : Grabbed`;
+
   const cardUrl = '/1/cards/'+card.id;
   const cardDetails = {
     name: movie.name,
-    desc: movie.desc,
+    desc: cardDesc,
   };
 
-  t.put(cardUrl, cardDetails, (err, res) => {
-    if(err) {
-      console.log(err+"");
-    } else {
-      // console.log(res);
-      addPoster(card, movie);
-    }
+  return new Promise((resolve, reject) => {
+    t.put(cardUrl, cardDetails, (err, res) => {
+      if(err) {
+        reject(err+"");
+      } else {
+        resolve(movie);
+      } 
+    });
   });
 }
 
@@ -132,16 +206,17 @@ function addPoster(card, movie) {
 
   const cardAttachUrl = '/1/cards/'+card.id+'/attachments';
   const attachment = {
-    url: isPretty(card) ? "" : movie.attachment,
+    url: movie.attachment,
   };
 
-  t.post(cardAttachUrl, attachment, (err, res) => {
-    if(err) {
-      console.log(err+"");
-    } else {
-      // console.log(res.id);
-      addGenres(card, movie);
-    }
+  return new Promise((resolve, reject) => {
+    t.post(cardAttachUrl, attachment, (err, res) => {
+      if(err) {
+        reject(err+"");
+      } else {
+        resolve(movie);
+      }  
+    });
   });
 }
 
@@ -156,20 +231,43 @@ function addPoster(card, movie) {
 function addGenres(card, movie) {
 
   const cardLabelsUrl = '/1/cards/'+card.id+'/labels';
+  const promises = [];
 
   movie.labels.forEach((l)=>{
     const label = {
       name: l,
     };
-    t.post(cardLabelsUrl, label, (err, res) => {
-      if(err) {
-        console.log(err+"");
-      } else {
-        // console.log(res);
-      }
-    });
-    handleCardSuccess(movie);
+
+    promises.push(new Promise((resolve, reject) => {
+
+      t.post(cardLabelsUrl, label, (err, res) => {
+        if(err) {
+          reject(err);
+        } else {
+          resolve(movie);
+        }
+      });
+    }));
   });
+
+  return Promise.all(promises);
+}
+
+function submitMovieToCard(movie, card) {
+
+  const promises = [];
+
+  promises.push(limiter.schedule(addMovieDetails, card, movie));
+
+  if(movie.attachment && !card.idAttachmentCover) {
+    promises.push(limiter.schedule(addPoster, card, movie));
+  }
+
+  if(movie.labels.length && card.labels.length) { 
+    promises.push(limiter.schedule(addGenres, card, movie));
+  }
+
+  return Promise.all(promises);
 }
 
 /**
@@ -181,68 +279,134 @@ function handleCardSuccess(movie) {
   console.log('Successfully grabbed!', movie.name);
 }
 
+//////////////////////
+// Resetting cards  //
+//////////////////////
+
 function resetCards(cards) {
 
   cards.forEach((card) => {
-    
-    // if(isPretty(card)) {
 
-      console.log('Stripping', card.name);
-      stripCard(card);
-    // }
+    stripCard(card);
   });
 }
 
 function stripCard(card) {
 
-  const strippedName = isPretty(card) 
-    ? card.name.substr(0, card.name.length - 6)
-    : card.name;
+/*  const strippedName = isPretty(card) 
+        ? card.name.substr(0, card.name.length - 6)
+        : card.name;
 
-  replaceNameAndDescription(card, strippedName);
-  stripLabels(card);
-  stripAttachment(card);
+  limiter.schedule(replaceNameAndDescription, card, strippedName)
+  .then((card) => {
+    if(card.idLabels.length) { return limiter.schedule(stripLabels, card); }
+    else { return [card]; }
+  },
+  (err) => {
+    console.log(err+"");
+  })
+  .then((card) => {
+    if(card[0].idAttachmentCover) { return limiter.schedule(stripAttachment, card[0]); }
+    else { return card[0]; }
+  },
+  (err) => {
+    console.log(err+"");
+  })
+  .then((card) => {
+    console.log('Stripped', card.name);
+  },
+  (err) => {
+    console.log(err+"");
+  });
+  */
+/*  const strippedName = isPretty(card) 
+        ? getTitleFromCardName(card.name)
+        : card.name;*/
 
-  // delete attachments
-  // t.delete
+  limiter.schedule(replaceNameAndDescription, card, card.name)
+  .then((card) => {
+    console.log();
+  })
+  .catch((err) => {
+    console.log(err+"");
+  });
+
+  if (card.idLabels.length) {
+
+    limiter.schedule(stripLabels, card)
+    .then((card) => {
+      console.log();
+    })
+    .catch((err) => {
+      console.log(err+"");
+    });
+  }
+    
+  if (card.idAttachmentCover) {
+
+    limiter.schedule(stripAttachment, card)
+    .then((card) => {
+      console.log();
+    })
+    .catch((err) => {
+      console.log(err+"");
+    });
+  }
 }
 
 function replaceNameAndDescription(card, strippedName) {
 
-  t.put('1/cards/'+card.id, {
-    name: strippedName,
-    desc: "",
-    // idLabels: []
-  }, (err, res) => {
-    if(err) {
-      console.log(err.responseBody, err.statusMessage);
-    } 
-  });
-}
+  return new Promise((resolve, reject) => {
 
-function stripLabels(card) {
+    console.log('Stripping', card.name);
 
-  card.labels.forEach((label) => {
-
-    console.log('Stripping LABEL:', label.name, "from", card.name);
-    t.del('1/cards/'+card.id+'/idLabels/'+label.id, (err, res) => {
-    if(err) {
-      console.log(err+"");
-    }
-    // } else {
-      // console.log("Deleted label", label.name, "from", card.name);
-    // }
+    t.put('1/cards/'+card.id, {
+      name: strippedName,
+      desc: "",
+      // idLabels: []
+    }, (err, res) => {
+      if(err) {
+        reject(err);  
+      } else {
+        resolve(card);
+      }
     });
   });
 }
 
 function stripAttachment(card) {
 
-  if(card.idAttachmentCover) {
+  return new Promise((resolve, reject) => {
+
     t.del('1/cards/'+card.id+'/attachments/'+card.idAttachmentCover, (err, res) => {
       if(err) {
-        console.log(err+"");
+        reject(err);
+      } else {
+        resolve(card);
       }
     });
-  }
+  });
+}
+
+function stripLabels(card) {
+
+  const promises = [];
+
+  card.labels.forEach((label) => {
+
+    console.log('Stripping LABEL:', label.name, "from", card.name);
+    
+    promises.push(new Promise((resolve, reject) => {  
+      
+      t.del('1/cards/'+card.id+'/idLabels/'+label.id, (err, res) => {
+        if(err) {
+          reject(err);
+        } else {
+          resolve(card);
+        }
+      });
+    }));
+  });
+
+  return Promise.all(promises);
 }

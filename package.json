@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/riotrah/trello-movie-prettifier#readme",
   "dependencies": {
+    "bottleneck": "^1.16.0",
     "cheerio": "^1.0.0-rc.2",
     "dotenv": "^4.0.0",
     "moviedb": "^0.2.8",
