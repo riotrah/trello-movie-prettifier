@@ -263,7 +263,7 @@ function submitMovieToCard(movie, card) {
     promises.push(limiter.schedule(addPoster, card, movie));
   }
 
-  if(movie.labels.length && card.labels.length) { 
+  if(movie.labels.length && !card.labels.length) { 
     promises.push(limiter.schedule(addGenres, card, movie));
   }
 

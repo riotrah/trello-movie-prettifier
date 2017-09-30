@@ -48,12 +48,6 @@ T_BOARD='<your Trello board id here>'
 
 * Run `node trello-movie` in your terminal
 
-# Current issues:
-
-- [ ] It may make too many requests at once due to its async nature 
-- [ ] It fails on slight misspellings of words
-- [ ] It only grabs the first movie from TMDB's response -> no way to specify date of original if reboot is trash
-
 # Contribution:
 
 1. Make a fork
@@ -64,11 +58,10 @@ T_BOARD='<your Trello board id here>'
 
 ## Some ideas
 
-- [ ] Implement API request limiting 
+- [ ] TESTS!
+- [ ] Grab netflix data in a better way than scraping InstantWatcher!
 - [ ] Implement spell checking
-- [ ] Implement a better way to tag a film as already prettified
-- [ ] Implement a way to pick the year of the title
-
+- [ ] Grab hulu or other data source
 
 # Credits
 
